@@ -1,5 +1,3 @@
+Here is the repo for the QuOptics main project task.
 
-
-Run the notebook [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/Adem-O/QuOPTICS/HEAD)
-.. image:: https://mybinder.org/badge_logo.svg
- :target: https://mybinder.org/v2/gh/Adem-O/QuOPTICS/HEAD
+To run the notebook use binder -> [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/Adem-O/QuOPTICS/HEAD)
