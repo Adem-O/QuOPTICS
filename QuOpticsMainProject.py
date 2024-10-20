@@ -10,7 +10,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from qutip import *
 from ipywidgets import interactive, FloatSlider, IntSlider, Checkbox, VBox, HBox, Button, Output, HTML
-from IPython.display import displaydef Plot_HO():
+from IPython.display import display
+def Plot_HO():
     # Initialize the figure outside the simulation function
     fig, ax = plt.subplots(figsize=(10, 8), layout='tight')
 
