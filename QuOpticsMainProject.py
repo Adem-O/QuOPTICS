@@ -213,7 +213,7 @@ def Plot_Fock(tlist=np.linspace(0, 100, 100)):
         def update(n):
             ax.clear()
             plot_fock_distribution(medata.states[n],fig=fig,ax=ax)
-        anim = animation.FuncAnimation(fig, update, frames=int(len(medata.states)/2+1), blit=True,interval = 1)
+        anim = animation.FuncAnimation(fig, update, frames=int(len(medata.states)/2+1), blit=False,interval = 0)
         # print(medata.states)
         # Return the animation HTML to display
         # display(HTML(ani.to_jshtml()))
