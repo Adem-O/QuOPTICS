@@ -1,14 +1,15 @@
-#!/usr/bin/env python
-# coding: utf-8
+# #!/usr/bin/env python
+# # coding: utf-8
 
 get_ipython().run_line_magic('matplotlib', 'widget')
 
 import numpy as np
 import matplotlib.pyplot as plt
 from qutip import *
-from ipywidgets import interactive, FloatSlider, IntSlider, Checkbox, VBox, HBox, Button, Output, HTML
-from IPython.display import display
-from IPython.display import HTML as HTMLIP
+from ipywidgets import interactive, FloatSlider, IntSlider, Checkbox, VBox, HBox, Button, Output
+from IPython.display import HTML, display, clear_output
+from matplotlib import animation
+
 
 def Plot_HO(tlist = np.linspace(0, 100, 100)):
     # Initialize the figure outside the simulation function
@@ -19,14 +20,14 @@ def Plot_HO(tlist = np.linspace(0, 100, 100)):
     driving_alpha_checkbox = Checkbox(value=False, description=r"Hide Driving")
     kerr_alpha_checkbox = Checkbox(value=False, description=r"Hide Kerr")
 
-    # Add a loading label
-    loading_label = HTML("<h3 style='color: blue;'>Loading...</h3>")
-    loading_label.layout.display = 'none'  # Initially hidden
+    # # Add a loading label
+    # loading_label = HTML("<h3 style='color: blue;'>Loading...</h3>")
+    # loading_label.layout.display = 'none'  # Initially hidden
 
     # Create sliders
     N_slider = IntSlider(value=30, min=1, max=100, description=r'Dim(H)')
     n_th_a_slider = IntSlider(value=4, min=1, max=10, description=r'$\langle \hat{n}_{E}\rangle$')
-    psi0_val_slider = IntSlider(value=9, min=0, max=30, description=r'$\rho_0$')
+    psi0_val_slider = IntSlider(value=9, min=0, max=15, description=r'$\rho_0$')
     kappa_slider = FloatSlider(value=0.01, min=0.0, max=0.5, step=0.01, description=r'$\gamma$')
     Omega_slider = FloatSlider(value=0.01, min=0.0, max=0.5, step=0.01, description=r'$\Omega$')
     k_slider = FloatSlider(value=0.05, min=0.0, max=0.2, step=0.01, description=r'$\kappa$')
@@ -112,7 +113,7 @@ def Plot_HO(tlist = np.linspace(0, 100, 100)):
             
         # Move the legend to the right side
         ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-        ax.set_ylim(0,15)
+        ax.set_ylim(0,25)
         
         # Redraw the updated plot
         plt.draw()
@@ -120,13 +121,13 @@ def Plot_HO(tlist = np.linspace(0, 100, 100)):
     # Function to be called when the button is clicked
     def on_submit(b):
         submit_button.disabled = True  # Disable the submit button
-        loading_label.layout.display = 'block'  # Show loading label
+        # loading_label.layout.display = 'block'  # Show loading label
         simulate_on_submit(N_slider.value, n_th_a_slider.value, psi0_val_slider.value, 
                            kappa_slider.value, driving_checkbox.value, kerr_checkbox.value, 
                            Omega_slider.value, k_slider.value, 
                            base_alpha_checkbox.value, driving_alpha_checkbox.value, kerr_alpha_checkbox.value,
                            steady_H0_checkbox.value,steady_H1_checkbox.value,steady_H2_checkbox.value)
-        loading_label.layout.display = 'none'  # Hide loading label
+        # loading_label.layout.display = 'none'  # Hide loading label
         submit_button.disabled = False  # Re-enable the submit button
 
     # Attach the function to the button
@@ -140,7 +141,7 @@ def Plot_HO(tlist = np.linspace(0, 100, 100)):
                          HBox([base_alpha_checkbox, steady_H0_checkbox]),
                          HBox([driving_alpha_checkbox,steady_H1_checkbox]),
                          HBox([kerr_alpha_checkbox,steady_H2_checkbox]), 
-                         submit_button, loading_label])  # Include the loading label in controls
+                         submit_button])  # Include the loading label in controls
 
     # Display controls
     display(controls_box)
@@ -153,98 +154,10 @@ def Plot_HO(tlist = np.linspace(0, 100, 100)):
                        steady_H0_checkbox.value,steady_H1_checkbox.value,steady_H2_checkbox.value)
 
 
-# def Plot_Fock(tlist=np.linspace(0, 100, 100)):
-#     N_slider = IntSlider(value=30, min=1, max=100, description=r'Dim(H)')
-#     n_th_a_slider = IntSlider(value=4, min=1, max=10, description=r'$\langle \hat{n}_{E}\rangle$')
-#     # Function to simulate and update plot
-#     def simulate_on_submit(N=30, n_th_a=4, psi0_val=9, kappa=0.03, driving=False, kerr=False, Omega=0.0, k=0.0):
 
-#         a = destroy(N)
-
-#         # Base Hamiltonian
-#         H0 = a.dag() * a
-#         H1 = Omega * (a.dag() + a)
-#         H2 = k * (a.dag() * a * a.dag() * a)
-#         psi0 = basis(N, psi0_val)
-
-#         # Collapse operators
-#         c_op_list = []
-#         rate = kappa * (1 + n_th_a)
-#         if rate > 0.0:
-#             c_op_list.append(np.sqrt(rate) * a)  # Decay operators
-#         rate = kappa * n_th_a
-#         if rate > 0.0:
-#             c_op_list.append(np.sqrt(rate) * a.dag())  # Excitation operators
-
-#         opts = {'store_states': True}
-#         H = H0
-#         if driving:
-#             H = H0 + H1 
-#         if kerr: 
-#             H = H0 + (H1 if driving else 0) + H2
-
-#         # Solve and create the animation for Fock distribution
-#         medata = mesolve(H, psi0, tlist, c_op_list, [a.dag() * a], options=opts)
-#         fig, ani = anim_fock_distribution(medata.states)
-#         title = f"$\\langle \\hat{{n}}_E\\rangle = {n_th_a}$, $\\gamma = {kappa}$"
-#         if driving:
-#             title += f", $\\Omega = {Omega}$"
-#         if kerr:
-#             title += f", $\\kappa = {k}$"
-#         fig.suptitle(title)
-        
-#         # Return the animation HTML to display
-#         display(HTMLIP(ani.to_jshtml()))
-#         plt.close(fig)
-
-#     # Function to be called when the button is clicked
-#     def on_submit(b):
-#         submit_button.disabled = True  # Disable the submit button
-#         simulate_on_submit(N_slider.value, n_th_a_slider.value, psi0_val_slider.value, 
-#                            kappa_slider.value, driving_checkbox.value, kerr_checkbox.value, 
-#                            Omega_slider.value, k_slider.value)
-#         submit_button.disabled = False  # Re-enable the submit button
-
-#     # Create sliders (ensure they are created only once)
-#     if not hasattr(Plot_Fock, "controls_initialized"):
-#         Plot_Fock.controls_initialized = True
-        
-#         N_slider = IntSlider(value=30, min=1, max=100, description=r'Dim(H)')
-#         n_th_a_slider = IntSlider(value=4, min=1, max=10, description=r'$\langle \hat{n}_{E}\rangle$')
-#         psi0_val_slider = IntSlider(value=9, min=0, max=30, description=r'$\rho_0$')
-#         kappa_slider = FloatSlider(value=0.01, min=0.0, max=0.5, step=0.01, description=r'$\gamma$')
-#         Omega_slider = FloatSlider(value=0.01, min=0.0, max=0.5, step=0.01, description=r'$\Omega$')
-#         k_slider = FloatSlider(value=0.05, min=0.0, max=0.2, step=0.01, description=r'$\kappa$')
-
-#         # Create checkboxes for driving and Kerr effects
-#         driving_checkbox = Checkbox(value=False, description="Include Driving")
-#         kerr_checkbox = Checkbox(value=False, description="Include Kerr")
-
-#         # Create the submit button
-#         submit_button = Button(description='Run Simulation')
-
-#         # Attach the function to the button
-#         submit_button.on_click(on_submit)
-
-#         # Arrange widgets in a box and display controls only once
-#         controls_box = VBox([HBox([N_slider, n_th_a_slider]),
-#                             HBox([psi0_val_slider, kappa_slider]), 
-#                             HBox([driving_checkbox, Omega_slider]), 
-#                             HBox([kerr_checkbox, k_slider]), 
-#                             submit_button])
-
-#         display(controls_box)
-
-#     # Call the simulation function once to show the initial plot
-#     simulate_on_submit(N_slider.value, n_th_a_slider.value, psi0_val_slider.value, 
-#                        kappa_slider.value, driving_checkbox.value, kerr_checkbox.value, 
-#                        Omega_slider.value, k_slider.value)
 def Plot_Fock(tlist=np.linspace(0, 100, 100)):
-    # Initialize the figure outside the simulation function
-    # fig, ax = plt.subplots(figsize=(10, 8), layout='tight')
-    # plt.rcParams["animation.html"] = "jshtml"
-
-    # Create sliders
+    
+    fig, ax = plt.subplots(figsize=(10, 8), layout='tight')
     N_slider = IntSlider(value=30, min=1, max=100, description=r'Dim(H)')
     n_th_a_slider = IntSlider(value=4, min=1, max=10, description=r'$\langle \hat{n}_{E}\rangle$')
     psi0_val_slider = IntSlider(value=9, min=0, max=30, description=r'$\rho_0$')
@@ -255,15 +168,15 @@ def Plot_Fock(tlist=np.linspace(0, 100, 100)):
     # Create checkboxes for driving and Kerr effects
     driving_checkbox = Checkbox(value=False, description="Include Driving")
     kerr_checkbox = Checkbox(value=False, description="Include Kerr")
-
+    
     # Create the submit button
     submit_button = Button(description='Run Simulation')
-
+        
+        
     # Function to simulate and update plot
     def simulate_on_submit(N=30, n_th_a=4, psi0_val=9, kappa=0.03, driving=False, kerr=False, Omega=0.0, k=0.0):
-        # nonlocal fig, ax  # Ensure we are referencing the outer 'fig' and 'ax'
-        # ax.clear()  # Clear the previous plot
-
+        # ax.clear()
+        
         a = destroy(N)
 
         # Base Hamiltonian
@@ -287,21 +200,27 @@ def Plot_Fock(tlist=np.linspace(0, 100, 100)):
             H = H0 + H1 
         if kerr: 
             H = H0 + (H1 if driving else 0) + H2
-        
+
         # Solve and create the animation for Fock distribution
         medata = mesolve(H, psi0, tlist, c_op_list, [a.dag() * a], options=opts)
-        fig, ani = anim_fock_distribution(medata.states)
+        
         title = f"$\\langle \\hat{{n}}_E\\rangle = {n_th_a}$, $\\gamma = {kappa}$"
         if driving:
             title += f", $\\Omega = {Omega}$"
         if kerr:
             title += f", $\\kappa = {k}$"
         fig.suptitle(title)
-        
+        def update(n):
+            ax.clear()
+            plot_fock_distribution(medata.states[n],fig=fig,ax=ax)
+        anim = animation.FuncAnimation(fig, update, frames=int(len(medata.states)/2+1), blit=True,interval = 1)
+        # print(medata.states)
         # Return the animation HTML to display
-        display(HTMLIP(ani.to_jshtml()))
-        plt.close(fig)
-
+        # display(HTML(ani.to_jshtml()))
+        # clear_output(HTML(ani.to_jshtml()), wait=True)
+        plt.show()
+        # plt.close(fig)
+        
 
     # Function to be called when the button is clicked
     def on_submit(b):
@@ -310,18 +229,19 @@ def Plot_Fock(tlist=np.linspace(0, 100, 100)):
                            kappa_slider.value, driving_checkbox.value, kerr_checkbox.value, 
                            Omega_slider.value, k_slider.value)
         submit_button.disabled = False  # Re-enable the submit button
+        
+
 
     # Attach the function to the button
     submit_button.on_click(on_submit)
 
-    # Arrange widgets in a box
+    # Arrange widgets in a box and display controls only once
     controls_box = VBox([HBox([N_slider, n_th_a_slider]),
-                         HBox([psi0_val_slider, kappa_slider]), 
-                         HBox([driving_checkbox, Omega_slider]), 
-                         HBox([kerr_checkbox, k_slider]), 
-                         submit_button])
+                        HBox([psi0_val_slider, kappa_slider]), 
+                        HBox([driving_checkbox, Omega_slider]), 
+                        HBox([kerr_checkbox, k_slider]), 
+                        submit_button])
 
-    # Display controls
     display(controls_box)
 
     # Call the simulation function once to show the initial plot
