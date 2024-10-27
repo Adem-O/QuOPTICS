@@ -16,12 +16,12 @@ import matplotlib.colors as colors
 
 def Plot_HO(tlist = np.linspace(0, 100, 100)):
     # Initialize the figure outside the simulation function
-    fig, ax = plt.subplots(figsize=(10, 8), layout='tight')
+    fig, ax = plt.subplots(figsize=(8, 6), layout='tight')
 
     # Add individual checkboxes for controlling transparency for each plot
-    base_alpha_checkbox = Checkbox(value=False, description=r"Hide damped HO")
-    driving_alpha_checkbox = Checkbox(value=False, description=r"Hide Driving")
-    kerr_alpha_checkbox = Checkbox(value=False, description=r"Hide Kerr")
+    base_alpha_checkbox = Checkbox(value=False, description=r"Dim damped HO")
+    driving_alpha_checkbox = Checkbox(value=False, description=r"Dim Driving")
+    kerr_alpha_checkbox = Checkbox(value=False, description=r"Dim Kerr")
 
     # # Add a loading label
     # loading_label = HTML("<h3 style='color: blue;'>Loading...</h3>")
@@ -77,31 +77,40 @@ def Plot_HO(tlist = np.linspace(0, 100, 100)):
 
         # Plot for base Hamiltonian
         ax.plot(tlist, medata_base.expect[0], lw=2, label=r'$\langle n(t) \rangle$ HO', alpha=base_alpha, color='tab:blue')
+        ymax = np.max(medata_base.expect[0])
+        ymin = np.min(medata_base.expect[0])
 
+        
         # If driving is enabled, add the driving term and simulate
         if driving:
             H1 = Omega * (a.dag() + a)
             H_with_driving = H0 + H1
             medata_driving = mesolve(H_with_driving, psi0, tlist, c_op_list, [a.dag() * a], options=opts)
             ax.plot(tlist, medata_driving.expect[0], lw=2, linestyle='--', label=r'$\langle n(t) \rangle$ Driving', alpha=driving_alpha, color='tab:orange')
-
+            if np.max(medata_driving.expect[0]) > ymax:
+                ymax = np.max(medata_driving.expect[0])
         # If Kerr nonlinearity is enabled, add the Kerr term and simulate
         if kerr:
             H2 = k * (a.dag() * a * a.dag() * a)
             H_with_kerr = H0 + (H1 if driving else 0) + H2
             medata_kerr = mesolve(H_with_kerr, psi0, tlist, c_op_list, [a.dag() * a], options=opts)
             ax.plot(tlist, medata_kerr.expect[0], lw=2, linestyle=':', label=r'$\langle n(t) \rangle$ Kerr', alpha=kerr_alpha, color='tab:green')
+            if np.max(medata_kerr.expect[0]) > ymax:
+                ymax = np.max(medata_kerr.expect[0])
+            
 
         # Set up the plot
-        ax.set_xlabel('Time', fontsize=24)
-        ax.set_ylabel(r'$\langle n \rangle$', fontsize=24)
-        ax.set_title('Evolution of Photon Number Expectation Value', fontsize=18)
+        ax.set_xlabel('Time')
+        ax.set_ylabel(r'$\langle n \rangle$')
+        ax.set_title('Evolution of Photon Number Expectation Value')
+
         
         # find steady-state solution
         if steady_H0:
             final_state_H0 = steadystate(H0, c_op_list)
             fexpt_H0 = expect(a.dag() * a, final_state_H0)
             plt.axhline(y=fexpt_H0, linestyle=':', lw=1.5, label='Steady H1', color='tab:blue')
+
         if steady_H1 and driving:
             H1 = Omega * (a.dag() + a)
             final_state_H0_1 = steadystate(H0+H1, c_op_list)
@@ -116,7 +125,11 @@ def Plot_HO(tlist = np.linspace(0, 100, 100)):
             
         # Move the legend to the right side
         ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-        ax.set_ylim(0,25)
+        
+        ymax = ymax*1.1
+        ymin = ymax*0.3
+
+        ax.set_ylim(ymin,ymax)
         
         # Redraw the updated plot
         plt.draw()
@@ -860,16 +873,13 @@ def Examine_Steady_State():
 
             # Print number operator statistics
             print(f"Number operator statistics:")
-            print(f"Mean photon number ⟨N⟩ = {n_mean_ss:.4f}")
-            print(f"Variance ΔN = {delta_N_ss:.4f}")
-
+            print(f"Mean photon number ⟨N⟩ = {n_mean_ss:.4f},    Variance ΔN = {delta_N_ss:.4f}")
+            
             # Print quadrature variances
             print("\nQuadrature variances:")
-            print(f"Δx = {delta_x_ss:.4f}")
-            print(f"Δp = {delta_p_ss:.4f}")
+            print(f"Δx = {delta_x_ss:.4f},    Δp = {delta_p_ss:.4f}")
             print(f"Product Δx * Δp = {delta_x_ss * delta_p_ss:.4f}")
-            print(f"Heisenberg uncertainty limit: 0.5")
-
+            
             # Print theoretical predictions
             print("\nTheoretical predictions:")
             print(f"Expected for thermal state with ⟨n_th⟩ = {n_th_slider.value}:")
@@ -881,21 +891,19 @@ def Examine_Steady_State():
             print("      (Where ⟨N⟩ is computed for the steady state)")
 
             # Conclusion based on number operator variances
-            print("\nConclusion based on Number Operator Variance:")
             if abs(delta_N_ss - delta_N_th) < abs(delta_N_ss - delta_N_coh):
-                print("The steady state is closer to a thermal state since the number state variance is closer to ΔN_th.")
+                print("\nThe steady state is closer to a thermal state (since the number state variance is closer to ΔN_th).")
             else:
-                print("The steady state is closer to a coherent state since the number state variance is closer to ΔN_coh.")
+                print("\nThe steady state is closer to a coherent state (since the number state variance is closer to ΔN_coh).")
 
             # Conclusion based on quadrature variances
-            print("\nConclusion based on Quadrature Variances:")
             uncertainty_product_ss = delta_x_ss * delta_p_ss
             if uncertainty_product_ss > 0.5 + 1e-3:  # Adding a small tolerance
-                print("The steady state exceeds the Heisenberg uncertainty limit, indicating a mixed or thermal-like state.")
+                print("\nBy the quadrature variance the steady state is likely thermal.")
             elif np.isclose(uncertainty_product_ss, 0.5, atol=1e-3):
-                print("The steady state saturates the Heisenberg uncertainty limit, indicating a coherent or minimum uncertainty state.")
+                print("\nBy the quadrature variance the steady state is likely coherent.")
             else:
-                print("The steady state has uncertainty below the Heisenberg limit, which is not physically possible for standard states.")
+                print("\nThe state is not physically possible.")
 
     # Attach the function to be called on slider/checkbox changes
     N_slider.observe(simulate_on_update, names='value')
