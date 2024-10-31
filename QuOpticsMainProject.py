@@ -5,14 +5,16 @@ get_ipython().run_line_magic('matplotlib', 'widget')
 
 import numpy as np
 import matplotlib.pyplot as plt
-
 from qutip import *
-from ipywidgets import interactive, FloatSlider, IntSlider, Checkbox, VBox, HBox, Button, Output
+from ipywidgets import interactive, FloatSlider, IntSlider, Checkbox, VBox, HBox, Button, Output, Dropdown
 from IPython.display import HTML, display, clear_output
+import contextlib  # Used to suppress QuTiP string outputs for mesolve
+from io import StringIO # Used to suppress QuTiP string outputs for mesolve
 from matplotlib import animation, cm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.colors as colors
+plt.rcParams['animation.embed_limit'] = 2**128
 
 def Plot_HO(tlist = np.linspace(0, 100, 100)):
     # Initialize the figure outside the simulation function
@@ -783,8 +785,8 @@ def Examine_Steady_State():
     output = Output()
 
     # Create sliders and widgets
-    N_slider = IntSlider(value=30, min=5, max=100, description=r'Dim($\mathcal{H}$)', continuous_update=True)
-    n_th_slider = IntSlider(value=5, min=0, max=10, description=r'$\langle n_{th} \rangle$', continuous_update=True)
+    N_slider = IntSlider(value=30, min=5, max=200, description=r'Dim($\mathcal{H}$)', continuous_update=True)
+    n_th_slider = FloatSlider(value=5, min=0, max=30, description=r'$\langle n_{th} \rangle$', continuous_update=True)
     Omega_slider = FloatSlider(value=0.0, min=0.0, max=1.0, step=0.01, description=r'$\Omega$', continuous_update=True)
     kappa_slider = FloatSlider(value=0.1, min=0.01, max=1.0, step=0.01, description=r'$\gamma$', continuous_update=True)
     
@@ -811,6 +813,19 @@ def Examine_Steady_State():
 
             # Compute the steady-state density matrix
             rho_ss = steadystate(H, c_ops)
+
+            # Check the trace of rho_ss to ensure it's normalized
+            trace_rho_ss = np.real(rho_ss.tr())
+            if not np.isclose(trace_rho_ss, 1.0, atol=1e-3):
+                print("Warning: The trace of the steady-state density matrix deviates from 1. Increase the Hilbert space dimension.")
+            
+            # Number state distribution and edge probability check
+            prob_n = np.real(np.diag(rho_ss.full()))
+            edge_probability = prob_n[-1] + prob_n[-2]  # Sum of probabilities at the highest Fock states
+            
+            if edge_probability > 0.01:
+                print("Warning: Significant probability is concentrated at the edge of the Hilbert space. Consider increasing the dimension.")
+
 
             # Number state distribution
             n = np.arange(N_slider.value)
@@ -901,7 +916,7 @@ def Examine_Steady_State():
             if uncertainty_product_ss > 0.5 + 1e-3:  # Adding a small tolerance
                 print("\nBy the quadrature variance the steady state is likely thermal.")
             elif np.isclose(uncertainty_product_ss, 0.5, atol=1e-3):
-                print("\nBy the quadrature variance the steady state is likely coherent.")
+                print("\nBy the quadrature variance the steady state is likely coherent or mixed.")
             else:
                 print("\nThe state is not physically possible.")
 
@@ -932,12 +947,12 @@ def Demonstrate_NonClassicality():
     output = Output()
 
     # Create sliders and widgets
-    N_slider = IntSlider(value=30, min=5, max=120, step=1, description=r'Dim($\mathcal{H}$)', continuous_update=False)
-    n_th_slider = IntSlider(value=5, min=1, max=15, step=1, description=r'$\langle n_{th} \rangle$', continuous_update=False)
+    N_slider = IntSlider(value=30, min=5, max=200, step=1, description=r'Dim($\mathcal{H}$)', continuous_update=False)
+    n_th_slider = FloatSlider(value=5, min=0, max=60, step=0.1, description=r'$\langle n_{th} \rangle$', continuous_update=False)
     Omega_slider = FloatSlider(value=0.2, min=0.0, max=1.0, step=0.01, description=r'$\Omega$', continuous_update=False)
     kappa_slider = FloatSlider(value=0.1, min=0.01, max=1.0, step=0.01, description=r'$\gamma$', continuous_update=False)
-    kerr_slider = FloatSlider(value=0.01, min=0.0, max=0.1, step=0.001, description=r'$\kappa$', continuous_update=False)
-    xi_slider = FloatSlider(value=0.0, min=-1.0, max=1.0, step=0.01, description=r'$\xi$', continuous_update=False)
+    kerr_slider = FloatSlider(value=0.01, min=0.0, max=10, step=0.001, description=r'$\kappa$', continuous_update=False)
+    # xi_slider = FloatSlider(value=0.0, min=-1.0, max=1.0, step=0.01, description=r'$\xi$', continuous_update=False)
 
     # Single slider for xvec range
     xvec_range_slider = IntSlider(value=5, min=2, max=20, step=1, description='Domain Size', continuous_update=False)
@@ -964,7 +979,7 @@ def Demonstrate_NonClassicality():
             Omega = Omega_slider.value
             kappa = kappa_slider.value
             kerr = kerr_slider.value
-            xi = xi_slider.value
+            # xi = xi_slider.value
             xvec_max = xvec_range_slider.value
             xvec_points = xvec_points_slider.value
 
@@ -972,7 +987,7 @@ def Demonstrate_NonClassicality():
             a = destroy(N)
 
             # Hamiltonian
-            H = a*a.dag()+ Omega * (a + a.dag()) + kerr *(a.dag()*a* a.dag()*a) + xi*(a.dag()*a.dag() + a*a)
+            H = a*a.dag()+ Omega * (a + a.dag()) + kerr *(a.dag()*a* a.dag()*a) 
 
             # Collapse operators
             c_ops = []
@@ -986,7 +1001,7 @@ def Demonstrate_NonClassicality():
             psi0 = basis(N, 0)
 
             # Solve the master equation
-            result = mesolve(H, psi0, tlist, c_ops, [])
+            # result = mesolve(H, psi0, tlist, c_ops, [])
 
             # Steady-state density matrix
             rho_ss = steadystate(H, c_ops)
@@ -1055,7 +1070,7 @@ def Demonstrate_NonClassicality():
     # Arrange widgets in a box and display controls
     controls_box = VBox([
         HBox([N_slider, n_th_slider]),
-        HBox([Omega_slider, kappa_slider, kerr_slider, xi_slider]),
+        HBox([Omega_slider, kappa_slider, kerr_slider]),
         HBox([xvec_range_slider, xvec_points_slider]),
         HBox([show_wigner_checkbox, show_mandelQ_checkbox, show_squeezing_checkbox]),
         submit_button
@@ -1066,3 +1081,208 @@ def Demonstrate_NonClassicality():
     # Call the simulation function once to show the initial results
     simulate_on_submit(None)
 
+
+def Plot_Stochastic_Simulations(tlist=np.linspace(0, 10, 1000), num_trajectories=10):
+
+    # Create output widget
+    output = Output()
+    
+    # Create sliders and widgets
+    N_slider = IntSlider(value=30, min=5, max=200, description=r'Dim($\mathcal{H}$)', continuous_update=False)
+    n_th_slider = FloatSlider(value=5, min=0, max=30, step=0.1, description=r'$\langle n_{th} \rangle$', continuous_update=False)
+    Omega_slider = FloatSlider(value=0.2, min=0.0, max=1.0, step=0.01, description=r'$\Omega$', continuous_update=False)
+    kappa_slider = FloatSlider(value=0.1, min=0.01, max=1.0, step=0.01, description=r'$\gamma$', continuous_update=False)
+    num_traj_slider = IntSlider(value=10, min=1, max=100, step=1, description='Trajectories', continuous_update=False)
+    k_slider = FloatSlider(value=0.0, min=0.0, max=1.0, step=0.01, description=r'$\kappa$', continuous_update=False)
+    
+    # Dropdown for initial state selection
+    initial_state_dropdown = Dropdown(
+        options=['Vacuum |0⟩', 'Fock State |n⟩', 'Coherent State |α⟩'],
+        value='Vacuum |0⟩',
+        description='Initial State:',
+    )
+    
+    # Slider for Fock state |n⟩ (only relevant if 'Fock State |n⟩' is selected)
+    fock_n_slider = IntSlider(value=0, min=0, max=30, description=r'Fock State $n$', continuous_update=False)
+    
+    # Slider for Coherent state |α⟩ (only relevant if 'Coherent State |α⟩' is selected)
+    coherent_alpha_slider = FloatSlider(value=1.0, min=0.0, max=5.0, step=0.1, description=r'Coherent State $|\alpha|$', continuous_update=False)
+    
+    # Create checkboxes
+    show_individual_checkbox = Checkbox(value=True, description="Show Individual Trajectories")
+    show_ensemble_checkbox = Checkbox(value=True, description="Show Ensemble Average")
+    include_mesolve_checkbox = Checkbox(value=False, description="Show Master Equation Solution")
+    
+    # Create the submit button
+    submit_button = Button(description='Run Simulation', button_style='success')
+    
+    # Function to simulate and update plot
+    def simulate_on_submit(N=30, n_th=5, Omega=0.2, kappa=0.1, num_traj=10, show_individual=True, 
+                           show_ensemble=True, include_mesolve=False, 
+                           initial_state='Vacuum |0⟩', fock_n=0, coherent_alpha=1.0, k=0.0):
+        with output:
+            clear_output(wait=True)
+            
+            # Define the annihilation operator
+            a = destroy(N)
+            
+            # Define the Hamiltonian components
+            H0 = a.dag() * a
+            H1 = Omega * (a + a.dag()) if Omega != 0 else 0
+            H2 = k * (a.dag() * a * a.dag() * a) if k != 0 else 0
+            H = H0 + H1 + H2
+            
+            # Define collapse operators for damping and thermal noise
+            c_ops = []
+            if kappa > 0.0:
+                c_ops.append(np.sqrt(kappa * (1 + n_th)) * a)
+                if n_th > 0:
+                    c_ops.append(np.sqrt(kappa * n_th) * a.dag())
+            
+            # Define the initial state based on user selection
+            if initial_state == 'Vacuum |0⟩':
+                initial_ket = basis(N, 0)
+            elif initial_state == 'Fock State |n⟩':
+                initial_ket = basis(N, fock_n)
+            elif initial_state == 'Coherent State |α⟩':
+                initial_ket = coherent(N, coherent_alpha)
+            else:
+                initial_ket = basis(N, 0)  # Default to vacuum if unknown option
+            
+            # Initialize lists to store expectation values
+            trajectories = []
+            ensemble_expect = np.zeros(len(tlist))
+            
+            # Perform stochastic simulations
+            for traj in range(num_traj):
+                # Suppress solver output
+                with contextlib.redirect_stdout(StringIO()), contextlib.redirect_stderr(StringIO()):
+                    # Simulate a single trajectory using mcsolve
+                    result = mcsolve(
+                        H, 
+                        initial_ket, 
+                        tlist, 
+                        c_ops, 
+                        e_ops=[a.dag() * a], 
+                        ntraj=1, 
+                        options={'nsteps': 10000}
+                    )
+                traj_expect = result.expect[0]
+                trajectories.append(traj_expect)
+                ensemble_expect += traj_expect
+            
+            # Compute ensemble average
+            if num_traj > 0:
+                ensemble_expect /= num_traj
+            else:
+                ensemble_expect = np.zeros(len(tlist))
+            
+            # Prepare the plot
+            fig, ax = plt.subplots(figsize=(10, 6))
+            
+            # Plot individual trajectories
+            if show_individual:
+                for idx, traj in enumerate(trajectories):
+                    label = 'Individual Trajectories' if idx == 0 else ""
+                    ax.plot(tlist, traj, lw=1, alpha=0.5, label=label)
+            
+            # Plot ensemble average
+            if show_ensemble:
+                ax.plot(tlist, ensemble_expect, lw=2, color='black', label='Ensemble Average')
+            
+            # Optionally include mesolve solution
+            if include_mesolve:
+                with contextlib.redirect_stdout(StringIO()), contextlib.redirect_stderr(StringIO()):
+                    # Solve the master equation deterministically
+                    rho0 = initial_ket * initial_ket.dag()
+                    result_mesolve = mesolve(
+                        H, 
+                        rho0, 
+                        tlist, 
+                        c_ops, 
+                        [a.dag() * a], 
+                        options={'nsteps': 10000}
+                    )
+                mesolve_expect = result_mesolve.expect[0]
+                ax.plot(tlist, mesolve_expect, lw=2, color='red', linestyle='--', label='Master Equation (mesolve)')
+            
+            # Finalize the plot
+            ax.set_xlabel('Time')
+            ax.set_ylabel(r'$\langle n \rangle$')
+            ax.set_title('Stochastic Simulations: Monte Carlo vs Master Equation')
+            ax.legend()
+            plt.show()
+    
+    # Function to update visibility of sliders based on initial state selection
+    def update_initial_state(*args):
+        if initial_state_dropdown.value == 'Fock State |n⟩':
+            fock_n_slider.layout.display = 'inline-flex'
+            coherent_alpha_slider.layout.display = 'none'
+        elif initial_state_dropdown.value == 'Coherent State |α⟩':
+            fock_n_slider.layout.display = 'none'
+            coherent_alpha_slider.layout.display = 'inline-flex'
+        else:
+            fock_n_slider.layout.display = 'none'
+            coherent_alpha_slider.layout.display = 'none'
+    
+    # Initialize the display of initial state sliders
+    fock_n_slider.layout.display = 'none'
+    coherent_alpha_slider.layout.display = 'none'
+    
+    # Attach the update function to the initial_state_dropdown
+    initial_state_dropdown.observe(update_initial_state, names='value')
+    
+    # Function to be called when the button is clicked
+    def on_submit(b):
+        submit_button.disabled = True  # Disable the submit button
+        # Run the simulation
+        simulate_on_submit(
+            N=N_slider.value, 
+            n_th=n_th_slider.value, 
+            Omega=Omega_slider.value, 
+            kappa=kappa_slider.value, 
+            num_traj=num_traj_slider.value, 
+            show_individual=show_individual_checkbox.value, 
+            show_ensemble=show_ensemble_checkbox.value, 
+            include_mesolve=include_mesolve_checkbox.value, 
+            initial_state=initial_state_dropdown.value, 
+            fock_n=fock_n_slider.value, 
+            coherent_alpha=coherent_alpha_slider.value, 
+            k=k_slider.value
+        )
+        submit_button.disabled = False  # Re-enable the submit button
+    
+    # Attach the function to the button
+    submit_button.on_click(on_submit)
+    
+    # Arrange widgets in a box and display controls
+    controls_box = VBox([
+        HBox([N_slider, n_th_slider]),
+        HBox([Omega_slider, kappa_slider]),
+        HBox([k_slider]),
+        HBox([initial_state_dropdown]),
+        HBox([fock_n_slider, coherent_alpha_slider]),
+        HBox([num_traj_slider]),
+        HBox([show_individual_checkbox, show_ensemble_checkbox, include_mesolve_checkbox]),
+        submit_button
+    ])
+    
+    # Display controls and output
+    display(controls_box)
+    display(output)
+    
+    # Initial plot
+    simulate_on_submit(
+        N=N_slider.value, 
+        n_th=n_th_slider.value, 
+        Omega=Omega_slider.value, 
+        kappa=kappa_slider.value, 
+        num_traj=num_traj_slider.value, 
+        show_individual=show_individual_checkbox.value, 
+        show_ensemble=show_ensemble_checkbox.value, 
+        include_mesolve=include_mesolve_checkbox.value, 
+        initial_state=initial_state_dropdown.value, 
+        fock_n=fock_n_slider.value, 
+        coherent_alpha=coherent_alpha_slider.value, 
+        k=k_slider.value
+    )
