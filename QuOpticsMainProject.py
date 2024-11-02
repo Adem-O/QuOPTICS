@@ -1019,11 +1019,10 @@ def Demonstrate_NonClassicality():
             # Check the population of the highest Fock state
             population_highest = populations[-1]
 
-            threshold = 1e-3 
+            threshold = 1e-2
 
             if population_highest > threshold:
-                print(f"Warning: Significant population ({population_highest:.2e}) in the highest Fock state.")
-                print(f"The current Dim(𝓗) = {N} may be too small for the given parameters.")
+                print(f"The current Dim(𝓗) = {N} may be too small.")
                 submit_button.disabled = False  # Re-enable the submit button
                 return
 
