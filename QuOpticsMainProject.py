@@ -11,10 +11,14 @@ from IPython.display import HTML, display, clear_output
 import contextlib  # Used to suppress QuTiP string outputs for mesolve
 from io import StringIO # Used to suppress QuTiP string outputs for mesolve
 from matplotlib import animation, cm
+from matplotlib.collections import LineCollection, PolyCollection
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.colors as colors
 plt.rcParams['animation.embed_limit'] = 2**128
+
+
+
 
 def Plot_HO(tlist = np.linspace(0, 100, 100)):
     # Initialize the figure outside the simulation function
@@ -942,6 +946,8 @@ def Examine_Steady_State():
 
 
 
+
+
 def Demonstrate_NonClassicality():
     # Create output widget
     output = Output()
@@ -949,17 +955,13 @@ def Demonstrate_NonClassicality():
     # Create sliders and widgets
     N_slider = IntSlider(value=30, min=5, max=200, step=1, description=r'Dim($\mathcal{H}$)', continuous_update=False)
     n_th_slider = FloatSlider(value=5, min=0, max=60, step=0.1, description=r'$\langle n_{th} \rangle$', continuous_update=False)
-    Omega_slider = FloatSlider(value=0.2, min=0.0, max=1.0, step=0.01, description=r'$\Omega$', continuous_update=False)
+    Omega_slider = FloatSlider(value=0.0, min=-20.0, max=20.0, step=0.01, description=r'$\Omega$', continuous_update=False)
     kappa_slider = FloatSlider(value=0.1, min=0.01, max=1.0, step=0.01, description=r'$\gamma$', continuous_update=False)
-    kerr_slider = FloatSlider(value=0.01, min=0.0, max=10, step=0.001, description=r'$\kappa$', continuous_update=False)
-    # xi_slider = FloatSlider(value=0.0, min=-1.0, max=1.0, step=0.01, description=r'$\xi$', continuous_update=False)
+    kerr_slider = FloatSlider(value=0.01, min=0.0, max=20.0, step=0.001, description=r'$\kappa$', continuous_update=False)
 
     # Single slider for xvec range
     xvec_range_slider = IntSlider(value=5, min=2, max=20, step=1, description='Domain Size', continuous_update=False)
     xvec_points_slider = IntSlider(value=200, min=50, max=500, step=50, description='xvec points', continuous_update=False)
-
-    # Time parameters
-    tlist = np.linspace(0, 10, 100)
 
     # Create checkboxes
     show_wigner_checkbox = Checkbox(value=True, description="Show Wigner Function")
@@ -979,7 +981,6 @@ def Demonstrate_NonClassicality():
             Omega = Omega_slider.value
             kappa = kappa_slider.value
             kerr = kerr_slider.value
-            # xi = xi_slider.value
             xvec_max = xvec_range_slider.value
             xvec_points = xvec_points_slider.value
 
@@ -987,26 +988,44 @@ def Demonstrate_NonClassicality():
             a = destroy(N)
 
             # Hamiltonian
-            H = a*a.dag()+ Omega * (a + a.dag()) + kerr *(a.dag()*a* a.dag()*a) 
+            H = a * a.dag() + Omega * (a + a.dag()) + kerr * (a.dag() * a * a.dag() * a)
 
             # Collapse operators
             c_ops = []
-            # Decay due to coupling with the environment
             if kappa > 0.0:
                 c_ops.append(np.sqrt(kappa * (1 + n_th)) * a)
                 if n_th > 0:
                     c_ops.append(np.sqrt(kappa * n_th) * a.dag())
 
+            # Estimate the required Hilbert space dimension
+            # Calculate the expected maximum photon number
+            n_expect = expect(a.dag() * a, steadystate(H, c_ops))
+            n_max = n_expect + 5 * np.sqrt(n_expect)  # 5 standard deviations above mean
+
+            if N <= n_max:
+                print(f"Warning: The current Hilbert space dimension (N = {N}) may be too small.\n Consider increasing Dim(𝓗)")
+                submit_button.disabled = False  # Re-enable the submit button
+                return
+
             # Initial state (vacuum)
             psi0 = basis(N, 0)
-
-            # Solve the master equation
-            # result = mesolve(H, psi0, tlist, c_ops, [])
 
             # Steady-state density matrix
             rho_ss = steadystate(H, c_ops)
 
-            
+            # Check if the density matrix is physical
+            if not rho_ss.isherm or np.any(rho_ss.eigenenergies() < -1e-10):
+                print("Error: The computed density matrix is not physical (not positive semi-definite).")
+                print("Please check the system parameters or increase Dim(𝓗).")
+                submit_button.disabled = False  # Re-enable the submit button
+                return
+
+            if abs(rho_ss.tr() - 1.0) > 1e-6:
+                print("Error: The trace of the density matrix is not 1.")
+                print("Please check the system parameters or increase Dim(𝓗).")
+                submit_button.disabled = False  # Re-enable the submit button
+                return
+
             if show_wigner_checkbox.value:
                 xvec = np.linspace(-xvec_max, xvec_max, xvec_points)
                 W_ss = wigner(rho_ss, xvec, xvec)
@@ -1020,15 +1039,94 @@ def Demonstrate_NonClassicality():
                 if abs(W_min) > abs(W_max):
                     vmax = np.abs(W_min)
                     vmin = -np.abs(W_min)
-                # Plot Wigner function with custom levels
-                fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-                im = ax.imshow(W_ss, extent=[xvec.min(), xvec.max(), xvec.min(), xvec.max()],
-                               cmap='seismic', vmin=vmin, vmax=vmax, origin='lower',  interpolation='spline16')
-                # Add axis labels
-                ax.set_xlabel(r'Re($\alpha$)')
-                ax.set_ylabel(r'Im($\alpha$)')
 
-                ax.set_title('Wigner Function of Steady State')
+                # Calculate expectation values of quadrature operators
+                x_op = (a + a.dag()) / np.sqrt(2)
+                p_op = -1j * (a - a.dag()) / np.sqrt(2)
+                x_mean = expect(x_op, rho_ss)
+                p_mean = expect(p_op, rho_ss)
+
+                # Find the indices closest to the expectation values
+                x_index = np.abs(xvec - x_mean).argmin()
+                p_index = np.abs(xvec - p_mean).argmin()
+
+                # Use these indices for the slices
+                y_values = W_ss[p_index, :]
+                x_values = W_ss[:, x_index]
+
+                fig, ax_main = plt.subplots(figsize=(8, 8))
+
+                # Main Wigner function plot
+                im = ax_main.imshow(W_ss, extent=[xvec.min(), xvec.max(), xvec.min(), xvec.max()],
+                                    cmap='seismic', vmin=vmin, vmax=vmax, origin='lower', interpolation='spline16')
+                ax_main.set_xlabel(r'$\alpha_r$')
+                ax_main.set_ylabel(r'$\alpha_i$')
+                ax_main.set_title('Wigner Function of Steady State')
+
+                # Add light grey lines indicating the slice positions
+                ax_main.axvline(x=x_mean, color='lightgrey', linestyle='--',alpha=0.4)
+                ax_main.axhline(y=p_mean, color='lightgrey', linestyle='--',alpha=0.4)
+
+                # Use make_axes_locatable to create space for 1D slice plots and colorbar
+                divider = make_axes_locatable(ax_main)
+
+                # 1D slice along x-axis (top of main plot)
+                ax_xslice = divider.append_axes("top", size="20%", pad=0.7, sharex=ax_main)
+                cmap = cm.seismic
+                norm = plt.Normalize(vmin=vmin, vmax=vmax)
+
+                # Create filled polygons under the x-axis slice
+                x_points = np.array([xvec[:-1], xvec[1:]]).T
+                polygons_x = [np.array([[x_points[i, 0], 0], [x_points[i, 1], 0],
+                                        [x_points[i, 1], y_values[i+1]], [x_points[i, 0], y_values[i]]])
+                              for i in range(len(x_points) - 1)]
+                poly_x = PolyCollection(polygons_x, cmap=cmap, norm=norm, alpha=0.4)
+                poly_x.set_array(y_values[:-1])
+                ax_xslice.add_collection(poly_x)
+
+                # Add the line plot on top of the filled area for x-axis slice
+                segments_x = [np.array([[x_points[i, 0], y_values[i]], [x_points[i, 1], y_values[i+1]]])
+                              for i in range(len(x_points) - 1)]
+                lc_x = LineCollection(segments_x, cmap=cmap, norm=norm)
+                lc_x.set_array(y_values[:-1])
+                lc_x.set_linewidth(2)
+                ax_xslice.add_collection(lc_x)
+
+                ax_xslice.set_ylim(W_min * 0.9, W_max * 1.1)
+                ax_xslice.set_ylabel(r'$W(\alpha_r,\, \langle \alpha_i \rangle)$')
+                ax_xslice.grid(True)
+                plt.setp(ax_xslice.get_xticklabels(), visible=False)
+
+                # 1D slice along y-axis (left of main plot)
+                ax_yslice = divider.append_axes("left", size="20%", pad=0.7, sharey=ax_main)
+                y_points = np.array([xvec[:-1], xvec[1:]]).T
+                polygons_y = [np.array([[0, y_points[i, 0]], [0, y_points[i, 1]],
+                                        [x_values[i+1], y_points[i, 1]], [x_values[i], y_points[i, 0]]])
+                              for i in range(len(y_points) - 1)]
+                poly_y = PolyCollection(polygons_y, cmap=cmap, norm=norm, alpha=0.4)
+                poly_y.set_array(x_values[:-1])
+                ax_yslice.add_collection(poly_y)
+
+                # Add the line plot on top of the filled area for y-axis slice
+                segments_y = [np.array([[x_values[i], y_points[i, 0]], [x_values[i+1], y_points[i, 1]]])
+                              for i in range(len(y_points) - 1)]
+                lc_y = LineCollection(segments_y, cmap=cmap, norm=norm)
+                lc_y.set_array(x_values[:-1])
+                lc_y.set_linewidth(2)
+                ax_yslice.add_collection(lc_y)
+
+                ax_yslice.set_xlim(W_min * 0.9, W_max * 1.1)
+                ax_yslice.set_xlabel(r'$W(\langle \alpha_r \rangle,\, \alpha_i)$')
+                ax_yslice.invert_xaxis()
+                ax_yslice.grid(True)
+                ax_yslice.tick_params(axis='x', labelrotation=45)
+                plt.setp(ax_yslice.get_yticklabels(), visible=False)
+
+                # Colorbar on the right of the main plot
+                cbar = divider.append_axes("right", size="5%", pad=0.05)
+                colorbar = plt.colorbar(im, cax=cbar)
+                colorbar.set_label(r'$W(\alpha_r,\alpha_i)$', fontsize=12, labelpad=1)
+
                 plt.show()
 
                 # Check for negative values in Wigner function
@@ -1052,16 +1150,19 @@ def Demonstrate_NonClassicality():
 
             # Check for quadrature squeezing
             if show_squeezing_checkbox.value:
-                x = (a + a.dag()) / np.sqrt(2)
-                p = -1j * (a - a.dag()) / np.sqrt(2)
-                delta_x = np.sqrt(variance(x, rho_ss))
-                delta_p = np.sqrt(variance(p, rho_ss))
+                x_op = (a + a.dag()) / np.sqrt(2)
+                p_op = -1j * (a - a.dag()) / np.sqrt(2)
+                delta_x = np.sqrt(variance(x_op, rho_ss))
+                delta_p = np.sqrt(variance(p_op, rho_ss))
+                delta_x0 = 1 / np.sqrt(2)  # Vacuum state uncertainty
+                delta_p0 = 1 / np.sqrt(2)
                 print(f"\nQuadrature variances:")
                 print(f"Δx = {delta_x:.4f}, Δp = {delta_p:.4f}")
-                if delta_x < 1/np.sqrt(2) or delta_p < 1/np.sqrt(2):
-                    print("One of the quadrature variances indicate state is squeezed (non-classical).")
+                if delta_x < delta_x0 or delta_p < delta_p0:
+                    print("One of the quadrature variances indicates the state is squeezed (non-classical).")
                 else:
-                    print("Quadrature variances indicate state is not squeezed.")
+                    print("Quadrature variances indicate the state is not squeezed.")
+
         submit_button.disabled = False  # Re-enable the submit button
 
     # Attach the function to the button
@@ -1080,6 +1181,8 @@ def Demonstrate_NonClassicality():
 
     # Call the simulation function once to show the initial results
     simulate_on_submit(None)
+
+
 
 
 def Plot_Stochastic_Simulations(tlist=np.linspace(0, 10, 1000), num_trajectories=10):
