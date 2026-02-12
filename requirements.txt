@@ -11,5 +11,5 @@ ipympl==0.9.4
 jupyter_client==7.4.9
 jupyter_core==5.5.0
 jupyter_server==2.10.0
-jupyterlab==4.0.8
+jupyterlab==4.4.8
 traitlets==5.7.1
